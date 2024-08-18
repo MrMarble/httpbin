@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -8,14 +9,25 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-var proxy_headers = []string{
-	"Forwarded", "Proxy-Authorization",
-	"X-Forwarded-For", "Proxy-Authenticate",
-	"X-Requested-With", "From",
-	"X-Real-Ip", "Via", "True-Client-Ip", "Proxy_Connection",
-}
+var (
+	proxy_headers = []string{
+		"Forwarded", "Proxy-Authorization",
+		"X-Forwarded-For", "Proxy-Authenticate",
+		"X-Requested-With", "From",
+		"X-Real-Ip", "Via", "True-Client-Ip", "Proxy_Connection",
+	}
+
+	port  = os.Getenv("PORT")
+	token = []byte(os.Getenv("TOKEN"))
+)
 
 func fastHTTPHandler(ctx *fasthttp.RequestCtx) {
+
+	if !bytes.Equal(ctx.Path(), token) {
+		ctx.Response.SetStatusCode(fasthttp.StatusNotFound)
+		return
+	}
+
 	real := ctx.Request.URI().QueryArgs().Peek("real")
 	remoteIP := ctx.RemoteIP().String()
 
@@ -49,15 +61,16 @@ func json(ctx *fasthttp.RequestCtx, level int, name string) {
 }
 
 func main() {
-	// pass plain function to fasthttp
-	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	fmt.Println("Listening on port", port)
+	token = []byte("/" + string(token))
+
+	fmt.Printf("Listening on :%s%s", port, token)
 
 	h := fasthttp.CompressHandler(fastHTTPHandler)
+
 	if err := fasthttp.ListenAndServe(":"+port, h); err != nil {
 		log.Fatalf("Error in ListenAndServe: %v", err)
 	}
